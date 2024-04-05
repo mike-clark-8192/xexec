@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace xexec
 {
@@ -28,12 +29,20 @@ namespace xexec
             public Stream Read()
             {
                 _readFrom.CopyTo(_writeTo);
+                if (_writeTo is MemoryStream ms)
+                {
+                    ms.Position = 0;
+                }
                 return _writeTo;
             }
 
             public async Task<Stream> ReadAsync()
             {
                 await _readFrom.CopyToAsync(_writeTo);
+                if (_writeTo is MemoryStream ms)
+                {
+                    ms.Position = 0;
+                }
                 return _writeTo;
             }
 
@@ -67,21 +76,40 @@ namespace xexec
             }
         }
 
+        public static CommandLineSplit ParseCommandLine(string commandLine, int rc)
+        {
+            CommandLineSplit commandLineSplit = new(commandLine);
+            XExecWriteDebug($"{rc} FileName[{commandLineSplit.FileName}] Arguments[{commandLineSplit.Arguments}]");
+            if (!commandLineSplit.OK)
+            {
+                XExecWriteError($"unparseable command line: {commandLine}");
+                Environment.Exit(rc);
+            }
+            return commandLineSplit;
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetCommandLineW();
+
+        static string Win32GetCommandLine()
+        {
+            IntPtr ptr = GetCommandLineW();
+            return Marshal.PtrToStringUni(ptr);
+        }
+
         async static Task<int> XExec()
         {
-            var commandLine = new CommandLineSplit(Environment.CommandLine);
-            if (!commandLine.OK)
-            {
-                XExecWriteError($"unparseable command line: {Environment.CommandLine}");
-                return 911911;
-            }
-            XExecWriteDebug($"FileName[{commandLine.FileName}] Arguments[{commandLine.Arguments}]");
+            var commandLine = Win32GetCommandLine();
+            XExecWriteDebug($"Win32GetCommandLine: {commandLine}");
+            var parsedCommand = ParseCommandLine(commandLine, 911911);
+            parsedCommand = ParseCommandLine(parsedCommand.Arguments, 912912);
+            XExecWriteDebug($"FileName[{parsedCommand.FileName}] Arguments[{parsedCommand.Arguments}]");
             Process proc = new()
             {
                 StartInfo = new()
                 {
-                    FileName = commandLine.FileName,
-                    Arguments = commandLine.Arguments,
+                    FileName = parsedCommand.FileName,
+                    Arguments = parsedCommand.Arguments,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -89,14 +117,17 @@ namespace xexec
                 }
             };
             proc.Start();
-            Stream thisStdIn = Console.OpenStandardInput();
+            var stdinWriteTask = Task.CompletedTask;
+            if (Console.IsInputRedirected)
+            {
+                stdinWriteTask = new BinaryStreamWriter(proc.StandardInput, Console.OpenStandardInput()).WriteAsync();
+            }
             Stream thisStdOut = Console.OpenStandardOutput();
             Stream thisStdErr = Console.OpenStandardError();
-            var stdinWriteTask = new BinaryStreamWriter(proc.StandardInput, thisStdIn).WriteAsync();
             var stdoutReadTask = new BinaryStreamReader(proc.StandardOutput, thisStdOut).ReadAsync();
             var stderrReadTask = new BinaryStreamReader(proc.StandardError).ReadAsync();
             await Task.WhenAll(stdinWriteTask, stdoutReadTask, stderrReadTask);
-            (await stdoutReadTask).CopyTo(thisStdErr);
+            stderrReadTask.Result.CopyTo(thisStdErr);
             proc.WaitForExit();
             var exitCode = proc.ExitCode;
             XExecWriteDebug($"exit code: {exitCode}");

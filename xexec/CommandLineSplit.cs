@@ -6,8 +6,8 @@ namespace xexec
     {
         public CommandLineSplit(string commandLine)
         {
-            Regex regexQuoted = new Regex(@"""(?<exe>[^""]+)""(?:\s(?<arg>.+))?");
-            Regex regexUnquoted = new Regex(@"(?<exe>[^\s]+)(?:\s(?<arg>.+))?");
+            Regex regexQuoted = new Regex(@"^\s*""(?<exe>[^""]+)""(?:\s(?<arg>.+))?$");
+            Regex regexUnquoted = new Regex(@"^\s*(?<exe>[^\s]+)(?:\s(?<arg>.+))?$");
             Match matchQuoted = regexQuoted.Match(commandLine);
             Match matchUnquoted = regexUnquoted.Match(commandLine);
             if (matchQuoted.Success)

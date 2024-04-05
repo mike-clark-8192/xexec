@@ -4,7 +4,26 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
+    <Configurations>Debug;Release;ReleaseWin</Configurations>
+    <ProduceReferenceAssembly>False</ProduceReferenceAssembly>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWin|AnyCPU'">
+    <Optimize>True</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseWin|AnyCPU'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <Target Name="PublishOnBuild" AfterTargets="Build" Condition="'$(PublishOnBuild)'!='true'">
+    <Delete Files="$(OutDir)publish\**\*.*" />
+    <Exec Command="cmd /c &quot;echo hi &amp;&amp; dotnet publish &#45;-configuration $(Configuration) &#45;-output $(OutDir)publish&quot;" 
+          EnvironmentVariables="PublishOnBuild=true"/>
+  </Target>
 
 </Project>
